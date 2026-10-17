@@ -104,6 +104,18 @@ kbd { font-family: var(--display); font-size: .95em; padding: .1em .5em; margin-
 .lbar { height: .9cqw; min-height: 5px; background: #ffffff22; border-radius: 99px; overflow: hidden; }
 .lfill { height: 100%; width: 0; background: linear-gradient(90deg, var(--orange), var(--pink)); border-radius: 99px; }
 .lsmall { margin: 0; font-family: var(--display); font-size: 1.5cqw; letter-spacing: .2em; text-transform: uppercase; color: #f3d9ff; }
+.win { gap: .9cqw; background: radial-gradient(ellipse at center, #2a0f3dcc, #140a24f0); }
+.passed { margin: 0; font-family: var(--display); font-size: 2.4cqw; letter-spacing: .3em; text-transform: uppercase; color: #ffd84a; }
+.congrats {
+  font-family: var(--display); font-size: 7.6cqw; line-height: 1; letter-spacing: .02em;
+  background: linear-gradient(180deg, #ffe36e, var(--orange) 50%, var(--pink)); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 .5cqw 0 #140a24) drop-shadow(0 0 2.4cqw #ffd84a88);
+}
+.winface { height: 13cqw; width: auto; filter: drop-shadow(0 0 2cqw #ffd84a); }
+.win .tag { font-size: 1.8cqw; margin: 0; }
+.win .stats { margin: 0; }
+.win .stats { font-size: 2cqw; }
+.win button { font-size: 2.4cqw; }
 @container (max-width: 560px) {
   .legend, .controls li:nth-child(3) { display: none; }
   .controls { border: 0; padding: 0 !important; flex-direction: row !important; gap: 3cqw !important; }
@@ -126,7 +138,7 @@ kbd { font-family: var(--display); font-size: .95em; padding: .1em .5em; margin-
       <figure class="card you"><div class="frame"><img id="pHorse" alt="The horse"></div><figcaption><span>You</span>The Horse</figcaption></figure>
       <div class="mid">
         <div class="vs">VS</div>
-        <p class="tag">He wants his horse back. Outrun him through Vice City.</p>
+        <p class="tag">He wants his horse back. Run 2,000 m to escape Vice City.</p>
         <button id="play">Start running</button>
         <p class="best" id="menuBest"></p>
       </div>
@@ -154,6 +166,14 @@ kbd { font-family: var(--display); font-size: .95em; padding: .1em .5em; margin-
       <div class="lbar"><div class="lfill" id="lfill"></div></div>
       <p class="lsmall">Loading Vice City…</p>
     </div>
+  </div>
+  <div class="overlay win" id="win" hidden>
+    <p class="passed">Mission passed</p>
+    <div class="congrats">CONGRATULATIONS!</div>
+    <img class="winface" id="winFace" alt="The horse">
+    <p class="tag">You outran him all the way out of Vice City. The horse is free.</p>
+    <div class="stats"><span>Distance <b id="wDist">0</b> m</span><span>Carrots <b id="wCar">0</b></span><span>Bagels <b id="wBag">0</b></span></div>
+    <button id="winAgain">Play again</button>
   </div>
   <div class="overlay" id="over" hidden>
     <div class="busted">BUSTED</div>
@@ -225,13 +245,14 @@ function jump() {
 addEventListener('keydown', e => {
   if (['Space', 'ArrowUp', 'KeyW'].includes(e.code)) {
     e.preventDefault();
-    if (S.running) jump(); else if (!menu.hidden) start(); else if (!over.hidden) start();
+    if (S.running) jump(); else if (!menu.hidden) start(); else if (!over.hidden || !document.getElementById('win').hidden) start();
   }
 });
 showBest();
 cv.addEventListener('pointerdown', e => { e.preventDefault(); jump(); });
 document.getElementById('play').onclick = start;
 document.getElementById('again').onclick = start;
+document.getElementById('winAgain').onclick = start;
 let actx = null, music = null, muted = false;
 try { muted = localStorage.getItem('gth6-mute') === '1'; } catch (e) {}
 const muteBtn = document.getElementById('mute');
@@ -245,7 +266,7 @@ const TIPS = [
   "Your head start drains faster with every wanted star.",
   "Frozen by the freeze ray? A boost breaks the ice."
 ];
-document.getElementById('pHorse').src = HORSE_SRC; document.getElementById('pGuy').src = GUY_SRC;
+document.getElementById('pHorse').src = HORSE_SRC; document.getElementById('winFace').src = HORSE_SRC; document.getElementById('pGuy').src = GUY_SRC;
 function showBest() { document.getElementById('menuBest').textContent = best ? `Best run: ${best} m` : ''; }
 function syncMute() { muteBtn.textContent = muted ? '♪ Off' : '♪ On'; muteBtn.setAttribute('aria-label', muted ? 'Unmute music' : 'Mute music'); if (music) music.gain.gain.value = muted ? 0 : .16; }
 muteBtn.onclick = e => { e.stopPropagation(); muted = !muted; try { localStorage.setItem('gth6-mute', muted ? '1' : '0'); } catch (err) {} syncMute(); };
@@ -325,7 +346,7 @@ function wakeAudio() {
 addEventListener('pointerdown', wakeAudio); addEventListener('keydown', wakeAudio);
 // a link ending in #play skips the menu and goes straight into a run
 if (location.hash === '#play') setTimeout(loadThenPlay, 0);
-function play() { reset(); startMusic(); menu.hidden = true; over.hidden = true; cv.focus?.(); }
+function play() { reset(); startMusic(); menu.hidden = true; over.hidden = true; document.getElementById('win').hidden = true; cv.focus?.(); }
 
 function puff(x, y, n, col = '#f6d7b0') {
   for (let i = 0; i < n; i++) S.parts.push({ x, y, vx: -2 - Math.random() * 3, vy: -Math.random() * 2.5, life: 30, col });
@@ -414,6 +435,7 @@ function update(dt) {
   S.quipT -= dt;
   if (S.quipT < -240) say(QUIPS[Math.floor(Math.random() * QUIPS.length)]);
 
+  if (S.dist >= GOAL) return win();
   if (S.gap <= 0) bust();
 }
 const HELPER_LINES = ["Go, horse, go!", "I got you! RUN!", "Boost incoming!", "You can do it!", "Don't let him catch you!"];
@@ -465,6 +487,38 @@ function updateTrio(dt) {
     say(["Whoa! Who are you guys?!", "Hey! Let me through!", "I'm seeing stars…"][Math.floor(Math.random() * 3)]);
   }
   if (tr.x < -200) { S.trio = null; S.nextTrio = 1500 + Math.random() * 900; }
+}
+const GOAL = 2000;
+function win() {
+  S.running = false; S.won = true; S.winT = S.t; stopMusic(); fanfare();
+  const d = Math.floor(S.dist);
+  if (d > best) { best = d; try { localStorage.setItem('gth6-best', best); } catch (e) {} showBest(); }
+  document.getElementById('wDist').textContent = d;
+  document.getElementById('wCar').textContent = S.carrots;
+  document.getElementById('wBag').textContent = S.bagels || 0;
+  const cols = ['#ff3d8b', '#ffa53d', '#2ee6d6', '#ffe36e', '#8a5cff', '#3ddc6a'];
+  S.confetti = Array.from({ length: 140 }, (_, i) => ({ x: Math.random() * W, y: -20 - Math.random() * 400, vy: 2 + Math.random() * 3, sway: Math.random() * 6, rot: Math.random() * 6, c: cols[i % cols.length] }));
+  setTimeout(() => { document.getElementById('win').hidden = false; }, 900);
+}
+function fanfare() {
+  if (!actx) return;
+  try {
+    const now = actx.currentTime, g = actx.createGain(); g.gain.value = .18; g.connect(actx.destination);
+    [[60, 0], [64, .14], [67, .28], [72, .42], [67, .62], [72, .76]].forEach(([m, at], i) => {
+      const o = actx.createOscillator(), e = actx.createGain(); o.type = i > 3 ? 'square' : 'triangle'; o.frequency.value = 440 * Math.pow(2, (m - 57) / 12);
+      const dur = i === 5 ? .9 : .22; e.gain.setValueAtTime(.0001, now + at); e.gain.exponentialRampToValueAtTime(.8, now + at + .02); e.gain.exponentialRampToValueAtTime(.0001, now + at + dur);
+      o.connect(e).connect(g); o.start(now + at); o.stop(now + at + dur + .05);
+    });
+  } catch (e) {}
+}
+function confetti() {
+  if (!S.won || !S.confetti) return;
+  const e = S.t - S.winT;
+  for (const p of S.confetti) {
+    const y = p.y + p.vy * e, x = p.x + Math.sin(e / 20 + p.sway) * 18;
+    if (y > H + 20) continue;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(p.rot + e / 15); ctx.fillStyle = p.c; ctx.fillRect(-5, -3, 10, 6); ctx.restore();
+  }
 }
 const GRU_LINES = ["FREEZE RAY!", "Lightbulb!", "Nobody outruns me, horse.", "Hold still, I have a plan!", "Freeze ray, ACTIVATE!"];
 function updateGru(dt, hb) {
@@ -869,6 +923,11 @@ function hud() {
   ctx.strokeText(c, W - 22, 126); ctx.fillStyle = '#ffa53d'; ctx.fillText(c, W - 22, 126);
   ctx.textAlign = 'left';
   // gap meter
+  const prog = Math.min(1, S.dist / GOAL);
+  ctx.font = '700 15px "Barlow Condensed", sans-serif'; ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+  ctx.fillText('ESCAPE VICE CITY  ' + Math.floor(S.dist) + ' / ' + GOAL + ' m', W / 2, 24); ctx.textAlign = 'left';
+  ctx.fillStyle = '#140a24aa'; ctx.fillRect(W / 2 - 130, 32, 260, 8);
+  ctx.fillStyle = '#ffd84a'; ctx.fillRect(W / 2 - 129, 33, 258 * prog, 6);
   ctx.font = '700 16px "Barlow Condensed", sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText('HEAD START', 22, 30);
   ctx.fillStyle = '#140a24aa'; ctx.fillRect(22, 38, 200, 14);
   const g = Math.max(0, S.gap) / 100;
@@ -903,6 +962,7 @@ function draw() {
   if (!S.running && !menu.hidden) {} else if (!S.running) { ctx.fillStyle = '#ff2e3a22'; ctx.fillRect(0, 0, W, H); }
   ctx.restore();
   hud();
+  confetti();
   jumpscare();
   bustScare();
 }
